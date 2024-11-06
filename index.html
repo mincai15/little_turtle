@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fruit Merge Game</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+        #gameCanvas {
+            border: 1px solid #000;
+            background-color: #f0f0f0;
+        }
+        #score {
+            font-size: 24px;
+            margin: 10px;
+        }
+        #ranking {
+            margin-top: 20px;
+        }
+        #endGameButton {
+            margin-top: 10px;
+            padding: 5px 10px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div id="score">Score: 0</div>
+    <canvas id="gameCanvas" width="400" height="600"></canvas>
+    <button id="endGameButton" onclick="endGame()">End Game</button>
+    <div id="ranking">Top Scores:</div>
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        let fruits = [];
+        const maxLevel = 6;
+        const fruitImages = ["🍎", "🍊", "🍋", "🍉", "🍇", "🍍", "🥭"];
+        let score = 0;
+        const baseFruitSize = 30;
+        const fallingSpeed = 2;
+
+        function createFruit(x, y, level) {
+            const size = baseFruitSize + level * 10;
+            return { x, y, level, size };
+        }
+
+        function updateScore(points) {
+            score += points;
+            document.getElementById("score").innerText = `Score: ${score}`;
+        }
+
+        function spawnFruit(x) {
+            const y = 0;
+            const level = 0;
+            fruits.push(createFruit(x - baseFruitSize / 2, y, level));
+        }
+
+        function drawFruit(fruit) {
+            ctx.font = `${fruit.size}px Arial`;
+            ctx.textAlign = "center";
+            ctx.fillText(fruitImages[fruit.level], fruit.x + fruit.size / 2, fruit.y + fruit.size);
+        }
+
+        function checkCollision() {
+            for (let i = 0; i < fruits.length - 1; i++) {
+                for (let j = i + 1; j < fruits.length; j++) {
+                    const fruitA = fruits[i];
+                    const fruitB = fruits[j];
+
+                    if (Math.abs(fruitA.x - fruitB.x) < fruitA.size &&
+                        Math.abs(fruitA.y - fruitB.y) < fruitA.size &&
+                        fruitA.level === fruitB.level) {
+                        if (fruitA.level < maxLevel) {
+                            fruitA.level++;
+                            fruitA.size = baseFruitSize + fruitA.level * 10;
+                            updateScore(10 * (fruitA.level + 1));
+                            fruits.splice(j, 1);
+                        }
+                        return;
+                    }
+                }
+            }
+        }
+
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            fruits.forEach((fruit) => {
+                fruit.y += fallingSpeed;
+                drawFruit(fruit);
+            });
+            fruits = fruits.filter(fruit => fruit.y < canvas.height);
+            checkCollision();
+            requestAnimationFrame(gameLoop);
+        }
+
+        canvas.addEventListener("click", (event) => {
+            const x = event.clientX - canvas.getBoundingClientRect().left;
+            spawnFruit(x);
+        });
+
+        async function endGame() {
+            await submitScore(score);
+            await fetchRanking();
+        }
+
+        async function submitScore(score) {
+            await fetch("http://localhost:3000/submit-score", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ score })
+            });
+        }
+
+        async function fetchRanking() {
+            const response = await fetch("http://localhost:3000/ranking");
+            const rankingData = await response.json();
+            const rankingDiv = document.getElementById("ranking");
+            rankingDiv.innerHTML = "Top Scores:<br>" + rankingData.map((entry) => `Score: ${entry.score}`).join("<br>");
+        }
+
+        gameLoop();
+    </script>
+</body>
+</html>
