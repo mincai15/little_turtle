@@ -1,0 +1,11 @@
+{
+  "builds": [
+    { "src": "server.js", "use": "@vercel/node" },
+    { "src": "index.html", "use": "@vercel/static" }
+  ],
+  "routes": [
+    { "src": "/submit-score", "dest": "server.js" },
+    { "src": "/ranking", "dest": "server.js" },
+    { "src": "/(.*)", "dest": "/index.html" }
+  ]
+}

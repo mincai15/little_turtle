@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fruit Merge Game</title>
+    <title>Fruit Stack Game</title>
     <style>
         body {
             display: flex;
@@ -21,110 +21,137 @@
             font-size: 24px;
             margin: 10px;
         }
-        #ranking {
-            margin-top: 20px;
-        }
-        #endGameButton {
-            margin-top: 10px;
-            padding: 5px 10px;
-            font-size: 16px;
-        }
     </style>
 </head>
 <body>
     <div id="score">Score: 0</div>
     <canvas id="gameCanvas" width="400" height="600"></canvas>
-    <button id="endGameButton" onclick="endGame()">End Game</button>
-    <div id="ranking">Top Scores:</div>
     <script>
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
 
         let fruits = [];
-        const maxLevel = 6;
-        const fruitImages = ["🍎", "🍊", "🍋", "🍉", "🍇", "🍍", "🥭"];
+        const maxLevel = 6; // 최대 7단계 (0 ~ 6)
+        const fruitImages = ["🍎", "🍊", "🍋", "🍉", "🍇", "🍍", "🥭"]; // 단계별 과일 이미지 (빨주노초파남보)
         let score = 0;
         const baseFruitSize = 30;
-        const fallingSpeed = 2;
+        const fallingSpeed = 5; // 과일이 떨어지는 기본 속도
 
+        // 과일 객체 생성
         function createFruit(x, y, level) {
-            const size = baseFruitSize + level * 10;
-            return { x, y, level, size };
+            const size = baseFruitSize + level * 10; // 레벨에 따라 크기 증가
+            return { x, y, level, size, isStacked: false, dx: 0 };
         }
 
+        // 점수 업데이트
         function updateScore(points) {
             score += points;
             document.getElementById("score").innerText = `Score: ${score}`;
         }
 
+        // 새로운 과일 추가
         function spawnFruit(x) {
-            const y = 0;
-            const level = 0;
+            const y = 0; // 과일은 항상 상단에서 시작
+            const level = 0; // 초기 레벨
             fruits.push(createFruit(x - baseFruitSize / 2, y, level));
         }
 
+        // 과일 드로잉
         function drawFruit(fruit) {
             ctx.font = `${fruit.size}px Arial`;
             ctx.textAlign = "center";
             ctx.fillText(fruitImages[fruit.level], fruit.x + fruit.size / 2, fruit.y + fruit.size);
         }
 
+        // 과일 이동 및 굴러내림 처리
+        function moveFruit(fruit) {
+            fruit.y += fallingSpeed; // 기본적으로 아래로 떨어짐
+            fruit.x += fruit.dx; // x축 이동 (굴러내림 효과)
+            if (Math.abs(fruit.dx) > 0) fruit.dx *= 0.98; // 이동 감속
+
+            // 화면 테두리에 닿으면 반대 방향으로 이동
+            if (fruit.x < 0 || fruit.x + fruit.size > canvas.width) {
+                fruit.dx = -fruit.dx * 0.5;
+                fruit.x = Math.max(0, Math.min(fruit.x, canvas.width - fruit.size));
+            }
+        }
+
+        // 충돌 감지 및 병합 처리
         function checkCollision() {
-            for (let i = 0; i < fruits.length - 1; i++) {
+            for (let i = 0; i < fruits.length; i++) {
                 for (let j = i + 1; j < fruits.length; j++) {
                     const fruitA = fruits[i];
                     const fruitB = fruits[j];
 
-                    if (Math.abs(fruitA.x - fruitB.x) < fruitA.size &&
-                        Math.abs(fruitA.y - fruitB.y) < fruitA.size &&
-                        fruitA.level === fruitB.level) {
-                        if (fruitA.level < maxLevel) {
-                            fruitA.level++;
-                            fruitA.size = baseFruitSize + fruitA.level * 10;
-                            updateScore(10 * (fruitA.level + 1));
-                            fruits.splice(j, 1);
+                    const dx = fruitA.x - fruitB.x;
+                    const dy = fruitA.y - fruitB.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance < (fruitA.size + fruitB.size) / 2) {
+                        if (fruitA.level === fruitB.level) {
+                            // 같은 레벨의 과일이 만나면 병합
+                            if (fruitA.level < maxLevel) {
+                                fruitA.level++;
+                                fruitA.size = baseFruitSize + fruitA.level * 10; // 크기 증가
+                                updateScore(10 * (fruitA.level + 1)); // 레벨에 따라 점수 추가
+                                fruits.splice(j, 1); // 과일 B 제거
+                                checkCollision(); // 병합 후 충돌 재확인
+                                return;
+                            }
+                        } else {
+                            // 다른 레벨의 과일이 닿으면 미끄러짐 효과
+                            const angle = Math.atan2(dy, dx);
+                            fruitA.dx += Math.cos(angle) * 2;
+                            fruitB.dx -= Math.cos(angle) * 2;
                         }
-                        return;
                     }
                 }
             }
         }
 
+        // 게임 루프
         function gameLoop() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 각 과일을 이동시키고 그리기
             fruits.forEach((fruit) => {
-                fruit.y += fallingSpeed;
+                if (!fruit.isStacked) {
+                    moveFruit(fruit);
+
+                    // 바닥에 도달하면 멈추고 쌓임
+                    if (fruit.y + fruit.size >= canvas.height) {
+                        fruit.y = canvas.height - fruit.size;
+                        fruit.isStacked = true;
+                    } else {
+                        // 다른 과일과 충돌하여 쌓이기
+                        fruits.forEach((otherFruit) => {
+                            if (otherFruit !== fruit && otherFruit.isStacked &&
+                                fruit.y + fruit.size > otherFruit.y &&
+                                Math.abs(fruit.x - otherFruit.x) < otherFruit.size / 2) {
+                                fruit.y = otherFruit.y - fruit.size;
+                                fruit.isStacked = true;
+                            }
+                        });
+                    }
+                }
                 drawFruit(fruit);
             });
-            fruits = fruits.filter(fruit => fruit.y < canvas.height);
+
             checkCollision();
+
             requestAnimationFrame(gameLoop);
         }
 
+        // 사용자 클릭 및 터치 이벤트로 과일 추가
         canvas.addEventListener("click", (event) => {
             const x = event.clientX - canvas.getBoundingClientRect().left;
             spawnFruit(x);
         });
 
-        async function endGame() {
-            await submitScore(score);
-            await fetchRanking();
-        }
-
-        async function submitScore(score) {
-            await fetch("http://localhost:3000/submit-score", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ score })
-            });
-        }
-
-        async function fetchRanking() {
-            const response = await fetch("http://localhost:3000/ranking");
-            const rankingData = await response.json();
-            const rankingDiv = document.getElementById("ranking");
-            rankingDiv.innerHTML = "Top Scores:<br>" + rankingData.map((entry) => `Score: ${entry.score}`).join("<br>");
-        }
+        canvas.addEventListener("touchstart", (event) => {
+            const x = event.touches[0].clientX - canvas.getBoundingClientRect().left;
+            spawnFruit(x);
+        });
 
         gameLoop();
     </script>
